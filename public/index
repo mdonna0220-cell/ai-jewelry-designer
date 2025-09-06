@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 服饰设计助手 (已修复 v5)</title>
+    <title>AI 服饰设计助手 (最终版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -499,10 +499,10 @@
     <script type="module">
     // --- Start of Script ---
     
-    // --- NEW: API URLs now point to our own server's proxy ---
-    const API_PROXY_BASE_URL = '/api/generateContent'; 
-    const GEMINI_API_URL = `${API_PROXY_BASE_URL}/gemini-1.5-flash`; // Model for text
-    const IMAGE_GENERATION_API_URL = `${API_PROXY_BASE_URL}/gemini-1.5-flash-image-preview-0827`; // Model for images
+    // 【重要修改】已将模型名称更新为最新的稳定版本
+    const API_PROXY_BASE_URL = '/api/generateContent';
+    const GEMINI_API_URL = `${API_PROXY_BASE_URL}/gemini-1.5-flash-latest`; // For text
+    const IMAGE_GENERATION_API_URL = `${API_PROXY_BASE_URL}/gemini-1.5-flash-latest`; // Also use for images
     
     const DAILY_API_LIMIT = 200; 
     const USAGE_STORAGE_KEY = 'fashionApiUsage'; 
@@ -719,48 +719,40 @@
         }
     }
 
-    // --- 调试版：请用这段代码替换掉你 index.html 中原来的 fetchWithRetry 函数 ---
-async function fetchWithRetry(url, options, retries = 3) {
-    const token = localStorage.getItem('userToken');
-    const headers = {
-        'Content-Type': 'application/json',
-        ...options.headers,
-    };
+    // --- MODIFIED: API Fetcher now includes Auth Token ---
+    async function fetchWithRetry(url, options, retries = 3) {
+        const token = localStorage.getItem('userToken');
+        const headers = {
+            'Content-Type': 'application/json',
+            ...options.headers,
+        };
+        
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
     
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    for (let i = 0; i < retries; i++) {
-        try {
-            const response = await fetch(url, { ...options, headers });
-            
-            // --- 调试代码开始 ---
-            console.log("服务器响应状态:", response.status, response.statusText);
-            if (!response.ok) {
-                // 在解析json之前，先尝试读取文本内容
-                const rawText = await response.text();
-                console.error("服务器返回了错误，原始文本内容是:", rawText);
-                // 尝试将文本作为JSON解析
-                try {
-                    const errorData = JSON.parse(rawText);
+        for (let i = 0; i < retries; i++) {
+            try {
+                const response = await fetch(url, { ...options, headers });
+                if (response.status === 401 || response.status === 403) {
+                    // Token is invalid or expired, force re-login
+                    localStorage.removeItem('userToken');
+                    showLogin();
+                    throw new Error('登录已过期，请重新登录。');
+                }
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
                     const errorMessage = errorData.error?.message || `HTTP Error: ${response.status}`;
                     throw new Error(errorMessage);
-                } catch (e) {
-                    // 如果解析失败，说明返回的不是JSON，可能是HTML错误页
-                    throw new Error(`服务器返回了非JSON格式的错误(状态码: ${response.status})`);
                 }
+                return await response.json(); 
+            } catch (error) {
+                if (i === retries - 1) throw error;
+                await new Promise(res => setTimeout(res, 1000 * (i + 1)));
             }
-            // --- 调试代码结束 ---
-
-            return await response.json(); 
-        } catch (error) {
-            console.error(`第 ${i + 1} 次尝试失败:`, error);
-            if (i === retries - 1) throw error;
-            await new Promise(res => setTimeout(res, 1000 * (i + 1)));
         }
     }
-}
+
     // --- Core Functions (Largely Unchanged) ---
     const getRandomElement = (arr) => arr[Math.floor(Math.random() * arr.length)];
     function generateRandomizedModelPrompt(modelType) { let prompt = ""; const sketchPoses = ['dynamic walking pose', 'elegant turning pose', 'classic contrapposto stance', 'energetic leaping pose', 'relaxed sitting pose', 'dramatic high fashion pose']; const photoPoses = ['standing confidently', 'walking towards camera', 'leaning against a plain wall', 'sitting on a simple stool', 'a dynamic mid-motion pose', 'a classic studio portrait pose']; const photoExpressions = ['a gentle smile', 'a neutral confident look', 'a joyful laugh', 'a thoughtful gaze', 'a powerful, direct stare', 'a serene expression']; const photoLenses = ['shot on a Canon EOS R5 with 85mm f/1.2 lens', 'shot on a Sony A7R IV with 135mm f/1.8 lens', 'shot on a Hasselblad X2D with 55mm f/2.5 lens', 'shot with a 50mm f/1.4 prime lens', 'captured with a 100mm macro lens for detail']; switch (modelType) { case 'sketch-asian': prompt = `Full body fashion illustration of a chic Asian model in a ${getRandomElement(sketchPoses)}. Expressive, clean, minimalist line art. Plain white background, perfect for a clothing design mockup.`; break; case 'sketch-black': prompt = `Full body fashion illustration of a graceful Black model in a ${getRandomElement(sketchPoses)}. Bold, dynamic, and expressive line art. Plain white background, perfect for a clothing design mockup.`; break; case 'sketch-european': prompt = `Full body fashion illustration of an elegant European model in a ${getRandomElement(sketchPoses)}. Sophisticated, fluid, and artistic line art. Plain white background, perfect for a clothing design mockup.`; break; case 'photo-asian': prompt = `Ultra-photorealistic full body photo of a professional young Asian female fashion model, ${getRandomElement(photoPoses)}, ${getRandomElement(photoExpressions)}. Plain studio background, professional lighting, ${getRandomElement(photoLenses)}.`; break; case 'photo-black': prompt = `Ultra-photorealistic full body photo of a professional young Black female fashion model, ${getRandomElement(photoPoses)}, ${getRandomElement(photoExpressions)}. Plain studio background, professional lighting, ${getRandomElement(photoLenses)}.`; break; case 'photo-european': prompt = `Ultra-photorealistic full body photo of a professional young Caucasian female fashion model, ${getRandomElement(photoPoses)}, ${getRandomElement(photoExpressions)}. Plain studio background, professional lighting, ${getRandomElement(photoLenses)}.`; break; } return prompt; }
@@ -896,26 +888,21 @@ async function fetchWithRetry(url, options, retries = 3) {
         lineartSubmitCustomDetailBtn.addEventListener('click', () => { const customPrompt = lineartCustomDetailInput.value.trim(); if (customPrompt) { lineartCustomDetailModal.classList.add('hidden'); handleLineartModify(customPrompt); lineartCustomDetailInput.value = ''; } else { showErrorMessage("请输入修改指令。"); } });
         lineartUploadModifyBtn.addEventListener('click', handleUploadedLineartModify);
 
-        // Auth event listeners
-        sendCodeBtn.addEventListener('click', handleSendCode);
-        loginBtn.addEventListener('click', handleLogin);
-    }
-    
-    // --- NEW: Initial App Logic ---
-    function initializeApp() {
-        setupEventListeners();
-        const token = localStorage.getItem('userToken');
-        if (token) {
-            // Assume token is valid, hide login. 
-            // The fetcher will force re-login if it's invalid.
-            hideLogin();
-        } else {
-            showLogin();
+        // --- NEW: Initial App Logic ---
+        function initializeApp() {
+            setupEventListeners();
+            const token = localStorage.getItem('userToken');
+            if (token) {
+                // Assume token is valid, hide login. 
+                // The fetcher will force re-login if it's invalid.
+                hideLogin();
+            } else {
+                showLogin();
+            }
         }
-    }
 
-    // Start the application
-    initializeApp();
+        // Start the application
+        initializeApp();
     </script>
 </body>
 </html>
