@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 服饰设计助手 (已修复 v5)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; 
+            color: #1f2937;
+        }
+        .container { max-width: 960px; position: relative; }
+        .btn { transition: all 0.2s ease; }
+        .btn:hover { transform: translateY(-2px); }
+        .btn-primary { background-color: #4f46e5; }
+        .btn-primary:hover { background-color: #4338ca; }
+        .btn-secondary { background-color: #6b7280; }
+        .btn-secondary:hover { background-color: #4b5563; }
+        .btn-tertiary { background-color: #dc2626; }
+        .btn-tertiary:hover { background-color: #b91c1c; }
+        .btn-tertiary:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .btn-quaternary { background-color: #f97316; }
+        .btn-quaternary:hover { background-color: #ea580c; }
+        .btn-quaternary:disabled { background-color: #fdba74; cursor: not-allowed; }
+        .btn-quintenary { background-color: #10b981; }
+        .btn-quintenary:hover { background-color: #059669; }
+        .btn-sidenary { background-color: #8b5cf6; }
+        .btn-sidenary:hover { background-color: #7c3aed; }
+        .btn-heptanary { background-color: #0891b2; }
+        .btn-heptanary:hover { background-color: #0e7490; }
+
+        #image-container img, #detail-image-container img, #uploaded-image-preview, #i2i-generated-image, #lineart-upload-generated-image {
+            max-width: 100%; height: auto; border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .modal { background-color: rgba(0, 0, 0, 0.5); }
+        #notebook-toggle, #encyclopedia-toggle {
+            position: absolute; top: 1rem; z-index: 20;
+        }
+        #notebook-toggle { right: 1rem; }
+        #encyclopedia-toggle { left: 1rem; }
+
+        .upload-zone { border: 2px dashed #cbd5e1; transition: all 0.2s ease; }
+        .upload-zone:hover { border-color: #8b5cf6; background-color: #f5f3ff; }
+        .upload-zone.has-image { border-color: #10b981; }
+
+        .spinner {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+            border-radius: 50%;
+            width: 2rem; /* 32px */
+            height: 2rem; /* 32px */
+            border-width: 4px;
+            border-color: #d1d5db; /* gray-300 */
+            border-top-color: #4f46e5; /* indigo-600 */
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        #notebook-panel {
+            position: absolute;
+            top: 4.5rem;
+            right: 1rem;
+        }
+
+        #notebook-header {
+            cursor: move;
+        }
+        
+        #auth-modal-overlay { background-color: rgba(0, 0, 0, 0.75); }
+        #app-container.blurred { filter: blur(5px); pointer-events: none; }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div id="auth-modal-overlay" class="fixed inset-0 z-40 hidden"></div>
+    <div id="auth-modal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm z-50 hidden">
+        <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">欢迎使用</h2>
+        <div class="space-y-4">
+            <div>
+                <label for="phone-input" class="block text-sm font-medium text-gray-700">手机号码</label>
+                <input type="tel" id="phone-input" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="请输入手机号">
+            </div>
+            <div class="flex items-end space-x-2">
+                <div class="flex-grow">
+                    <label for="code-input" class="block text-sm font-medium text-gray-700">验证码</label>
+                    <input type="text" id="code-input" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="请输入4位验证码">
+                </div>
+                <button id="send-code-btn" class="flex-shrink-0 px-4 py-2 text-white font-semibold rounded-md btn-secondary">发送验证码</button>
+            </div>
+            <p id="auth-error-msg" class="text-sm text-red-600 text-center h-4"></p>
+            <button id="login-btn" class="w-full py-3 px-4 border border-transparent rounded-full shadow-lg text-base font-bold text-white btn-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                登录 / 注册
+            </button>
+        </div>
+    </div>
+
+    <div id="app-container" class="container mx-auto bg-white p-8 rounded-2xl shadow-2xl space-y-8">
+        
+        <div id="notebook-toggle" class="p-2 rounded-full hover:bg-gray-100 cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+        </div>
+        
+        <div id="encyclopedia-toggle" class="p-2 rounded-full hover:bg-gray-100 cursor-pointer">
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v11.494m-9-8.494h18m-18 5.494h18M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+        </div>
+
+        <div id="notebook-panel" class="hidden w-72 bg-white/80 backdrop-blur-sm p-4 rounded-lg shadow-lg z-30">
+            <div id="notebook-header" class="flex justify-between items-center pb-2 mb-2 border-b border-gray-200">
+                 <h3 class="text-lg font-bold text-gray-800">灵感笔记本</h3>
+                 <span class="text-gray-400" title="可拖动">✥</span>
+            </div>
+            <textarea id="notebook-textarea" class="w-full h-48 p-2 border border-gray-200 rounded-md resize-none focus:ring-2 focus:ring-purple-400" placeholder="在这里记录你的灵感关键词..."></textarea>
+            <div class="flex justify-between items-center mt-2">
+                <span id="notebook-status" class="text-sm text-green-600 opacity-0 transition-opacity">已保存!</span>
+                <div>
+                    <button id="notebook-copy-btn" class="px-3 py-1 text-sm font-semibold text-white rounded-full btn btn-secondary">复制</button>
+                    <button id="notebook-clear-btn" class="px-3 py-1 text-sm font-semibold text-white rounded-full btn btn-tertiary">清空</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="main-page">
+            <header class="text-center">
+                <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-800">AI 服饰设计助手 👕</h1>
+                <p class="mt-2 text-gray-600">输入你的服装设计想法，生成专业的设计图和说明。</p>
+                <p class="mt-2 text-sm text-gray-500">今日剩余次数: <span id="api-usage-counter">--</span></p>
+            </header>
+            
+            <div class="text-center">
+                <button id="go-to-i2i" class="inline-block px-6 py-2 text-white font-bold rounded-full shadow-lg btn-heptanary">切换到图生图模式 →</button>
+            </div>
+
+            <section class="space-y-4">
+                <div>
+                    <label for="prompt-input" class="block text-sm font-medium text-gray-700">
+                        输入你的服装设计想法：
+                    </label>
+                    <textarea id="prompt-input" rows="4" class="mt-1 block w-full rounded-lg border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500 transition-colors" placeholder="例如: 一件赛博朋克风格的未来派夹克，带有霓虹灯带，由反光面料制成"></textarea>
+                </div>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <button id="refine-btn" class="min-w-0 w-full px-4 py-3 border border-transparent rounded-full shadow-lg text-sm sm:text-base font-bold text-white btn btn-tertiary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                        <span>灵感词库 📚</span>
+                    </button>
+
+                    <div class="relative min-w-0">
+                        <button id="generate-model-btn" class="w-full px-4 py-3 border border-transparent rounded-full shadow-lg text-sm sm:text-base font-bold text-white btn btn-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            <span>生成模特 🧍</span>
+                        </button>
+                        <div id="model-options" class="absolute top-full mt-2 w-56 bg-white rounded-md shadow-lg z-10 hidden origin-top-right right-0">
+                            <div class="py-1">
+                                <div class="px-4 py-2 text-xs text-gray-400">手绘设计图模特</div>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-model-type="sketch-asian">亚洲模特</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-model-type="sketch-black">非洲模特</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-model-type="sketch-european">欧洲模特</a>
+                                <div class="border-t border-gray-100 my-1"></div>
+                                <div class="px-4 py-2 text-xs text-gray-400">真人模特</div>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-model-type="photo-asian">亚洲模特</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-model-type="photo-black">非洲模特</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-model-type="photo-european">欧洲模特</a>
+                                <div class="border-t border-gray-100 my-1"></div>
+                                <a href="#" id="custom-model-btn" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 font-bold">自定义模特...</a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button id="generate-btn" class="min-w-0 w-full px-4 py-3 border border-transparent rounded-full shadow-lg text-sm sm:text-base font-bold text-white btn btn-quaternary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500" disabled>
+                        <span>生成设计图 ✨</span>
+                    </button>
+                    <button id="lineart-btn" class="min-w-0 w-full px-4 py-3 border border-transparent rounded-full shadow-lg text-sm sm:text-base font-bold text-white btn btn-sidenary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                        <span>设计线稿 ✒️</span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="space-y-4">
+                <div id="result-container" class="space-y-4">
+                    <div id="main-loading-container" class="text-center py-8 hidden">
+                        <div class="spinner"></div>
+                        <p class="mt-2 text-sm font-medium text-gray-600">正在加载...</p>
+                    </div>
+
+                    <div id="image-container" class="w-full h-auto flex justify-center items-center relative">
+                        <img id="generated-image" class="hidden" alt="Generated AI Image">
+                    </div>
+
+                    <div id="model-modification-container" class="hidden text-center mt-4 space-y-3">
+                        <button id="show-modify-model-input-btn" class="px-6 py-2 text-white font-bold rounded-full shadow-lg btn-heptanary">修改模特图 🎨</button>
+                        <div id="modify-model-input-area" class="hidden w-full max-w-lg mx-auto space-y-2">
+                            <textarea id="modify-model-prompt" rows="2" class="w-full rounded-lg border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500" placeholder="例如：给模特换上红色长发，穿上皮夹克"></textarea>
+                            <button id="submit-model-modification-btn" class="w-full sm:w-auto px-6 py-2 text-white font-bold rounded-full shadow-lg btn-quintenary">生成修改图</button>
+                        </div>
+                    </div>
+                    
+                    <div id="detail-image-container" class="w-full h-auto flex justify-center items-center mt-4">
+                        <div class="relative w-full">
+                             <div id="detail-loading-container" class="text-center py-8 hidden">
+                                <div class="spinner"></div>
+                                <p class="mt-2 text-sm font-medium text-gray-600">正在生成修改图...</p>
+                            </div>
+                            <img id="detail-image" class="hidden mx-auto" alt="Detailed AI Image">
+                        </div>
+                    </div>
+
+                    <div id="story-buttons-container" class="flex flex-col space-y-2 mt-4 hidden">
+                        <label for="story-prompt-input" class="block text-sm font-medium text-gray-700">
+                            设计说明指令 (可编辑)：
+                        </label>
+                        <textarea id="story-prompt-input" rows="2" class="w-full rounded-lg border border-gray-300 shadow-sm p-3 story-prompt-textarea focus:border-indigo-500 focus:ring-indigo-500 transition-colors"></textarea>
+                        <div class="flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-2 mt-4 relative">
+                            <button id="story-btn" class="w-full sm:w-auto px-6 py-3 border border-transparent rounded-full shadow-lg text-base sm:text-lg font-bold text-white btn-tertiary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" disabled>
+                                <span>生成设计说明 ✨</span>
+                            </button>
+                            <button id="detail-btn" class="w-full sm:w-auto px-6 py-3 border border-transparent rounded-full shadow-lg text-base sm:text-lg font-bold text-white btn-quintenary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" disabled>
+                                <span>深化设计细节 🔬</span>
+                            </button>
+                            <div id="detail-options" class="absolute top-full mt-2 w-full sm:w-auto bg-white rounded-md shadow-lg z-10 hidden">
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 font-bold" data-detail-prompt="custom">更多细节... (手动输入)</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-detail-prompt="Show a macro close-up of the fabric texture.">放大面料细节</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-detail-prompt="Show the back view of this garment.">展示服装背面</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-detail-prompt="Show the side profile of this garment.">展示服装侧面</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-detail-prompt="Show this garment on a runway model.">展示模特上身效果</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-detail-prompt="Show this garment flat lay.">展示服装平铺图</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="story-container" class="p-4 bg-gray-50 border border-dashed border-gray-300 rounded-lg hidden">
+                        <p class="text-sm font-medium text-gray-700">设计说明：</p>
+                        <p id="story-text" class="mt-1 text-gray-900 leading-relaxed whitespace-pre-wrap"></p>
+                        <div id="story-action-buttons" class="flex justify-center mt-4 hidden">
+                            <button id="copy-story-btn" class="px-6 py-2 text-sm font-bold text-white rounded-full shadow-lg btn-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                                一键复制
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="error-message" class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg hidden">
+                        <p id="error-text" class="text-sm font-medium"></p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div id="i2i-page" class="hidden">
+             <header class="text-center">
+                <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-800">图生图工作室 🖼️</h1>
+                <p class="mt-2 text-gray-600">上传模特与服装，一键生成穿搭效果图。</p>
+            </header>
+            <div class="text-center mt-4">
+                <button id="go-to-main" class="inline-block px-6 py-2 text-white font-bold rounded-full shadow-lg btn-secondary">← 返回文本创作模式</button>
+            </div>
+            <section id="image-to-image-section" class="space-y-6 pt-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="w-full">
+                        <p class="text-center font-semibold text-gray-700 mb-2">1. 上传模特图</p>
+                        <label for="i2i-model-upload-input" class="block text-center p-6 rounded-lg cursor-pointer upload-zone">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                            <span class="mt-2 block text-sm font-medium text-gray-600">点击上传模特</span>
+                        </label>
+                        <input type="file" id="i2i-model-upload-input" class="hidden" accept="image/*">
+                        <div id="i2i-model-preview-container" class="hidden text-center mt-4">
+                             <img id="i2i-model-preview" class="mx-auto" style="max-height: 200px; width: auto;" alt="Model Preview">
+                        </div>
+                    </div>
+                     <div class="w-full">
+                        <p class="text-center font-semibold text-gray-700 mb-2">2. 上传服装图</p>
+                        <label for="i2i-garment-upload-input" class="block text-center p-6 rounded-lg cursor-pointer upload-zone">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                            <span class="mt-2 block text-sm font-medium text-gray-600">点击上传服装</span>
+                        </label>
+                        <input type="file" id="i2i-garment-upload-input" class="hidden" accept="image/*">
+                         <div id="i2i-garment-preview-container" class="hidden text-center mt-4">
+                             <img id="i2i-garment-preview" class="mx-auto" style="max-height: 200px; width: auto;" alt="Garment Preview">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-full max-w-md mx-auto space-y-4">
+                    <button id="try-on-btn" class="w-full py-3 px-4 border border-transparent rounded-full shadow-lg text-base font-bold text-white btn btn-quintenary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" disabled>一键穿搭 👕</button>
+                    
+                    <div id="i2i-generated-image-container" class="hidden text-center">
+                         <div class="space-y-6">
+                            <div id="i2i-before-container" class="hidden w-full relative">
+                                <img id="i2i-before-image" class="mx-auto rounded-lg shadow-md" alt="Original Try-on Image">
+                            </div>
+                            <div id="i2i-after-container" class="w-full relative">
+                                <div id="i2i-loading-container" class="text-center py-8 hidden">
+                                    <div class="spinner"></div>
+                                    <p class="mt-2 text-sm font-medium text-gray-600">正在加载...</p>
+                                </div>
+                                <img id="i2i-generated-image" class="mx-auto rounded-lg shadow-md" alt="Generated Image">
+                            </div>
+                            <div id="i2i-modification-buttons" class="w-full flex flex-col items-center gap-2">
+                                <button id="modify-try-on-btn" class="hidden w-full sm:w-auto px-6 py-3 border border-transparent rounded-full shadow-lg text-base font-bold text-white btn-heptanary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500">
+                                    <span>修改效果图 🎨</span>
+                                </button>
+                                <button id="generate-copy-btn" class="hidden w-full sm:w-auto px-6 py-3 border border-transparent rounded-full shadow-lg text-base font-bold text-white btn-sidenary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                                    <span>生成文案 ✍️</span>
+                                </button>
+                            </div>
+                            <div id="copy-display-container" class="hidden p-4 bg-gray-50 border border-dashed border-gray-300 rounded-lg text-left">
+                                <div class="flex justify-between items-center mb-2">
+                                     <p class="text-sm font-medium text-gray-700">生成文案：</p>
+                                     <button id="copy-generated-text-btn" class="px-3 py-1 text-sm font-semibold text-white rounded-full btn btn-secondary">复制</button>
+                                </div>
+                                <p id="generated-copy-text" class="mt-1 text-gray-900 leading-relaxed whitespace-pre-wrap"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        
+        <div id="vocab-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-2xl bg-white space-y-6">
+                <div class="flex justify-between items-center pb-3">
+                    <h3 class="text-2xl font-bold text-gray-900">服饰设计灵感词库</h3>
+                    <button id="close-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                </div>
+                <div class="space-y-4">
+                    <h4 class="text-lg font-semibold text-gray-700 cursor-pointer hover:text-indigo-600 transition-colors" data-target="style-type-buttons">款式类别 (Garment Type)</h4>
+                    <div id="style-type-buttons" class="flex flex-wrap gap-2 hidden"></div>
+                </div>
+                <div class="space-y-4">
+                    <h4 class="text-lg font-semibold text-gray-700 cursor-pointer hover:text-indigo-600 transition-colors" data-target="aesthetic-buttons">设计风格 (Aesthetic)</h4>
+                    <div id="aesthetic-buttons" class="flex flex-wrap gap-2 hidden"></div>
+                </div>
+                <div class="space-y-4">
+                    <h4 class="text-lg font-semibold text-gray-700 cursor-pointer hover:text-indigo-600 transition-colors" data-target="material-buttons">面料材质 (Material)</h4>
+                    <div id="material-buttons" class="flex flex-wrap gap-2 hidden"></div>
+                </div>
+                <div class="space-y-4">
+                    <h4 class="text-lg font-semibold text-gray-700 cursor-pointer hover:text-indigo-600 transition-colors" data-target="pattern-buttons">图案印花 (Pattern/Print)</h4>
+                    <div id="pattern-buttons" class="flex flex-wrap gap-2 hidden"></div>
+                </div>
+                <div class="space-y-4">
+                    <h4 class="text-lg font-semibold text-gray-700 cursor-pointer hover:text-indigo-600 transition-colors" data-target="details-buttons">细节剪裁 (Details/Cut)</h4>
+                    <div id="details-buttons" class="flex flex-wrap gap-2 hidden"></div>
+                </div>
+                <div class="space-y-4">
+                    <h4 class="text-lg font-semibold text-gray-700 cursor-pointer hover:text-indigo-600 transition-colors" data-target="color-buttons">色彩搭配 (Color)</h4>
+                    <div id="color-buttons" class="flex flex-wrap gap-2 hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="custom-detail-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-2xl bg-white space-y-4">
+                <div class="flex justify-between items-center"> <h3 class="text-xl font-bold text-gray-900">输入自定义修改指令</h3> <button id="close-custom-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button> </div>
+                <div> <textarea id="custom-detail-input" rows="3" class="w-full rounded-lg border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500" placeholder="例如：给这件夹克加上兜帽"></textarea> </div>
+                <div class="flex justify-end"> <button id="submit-custom-detail" class="px-6 py-2 text-white font-bold rounded-full shadow-lg btn-quintenary">生成细节图</button> </div>
+            </div>
+        </div>
+        
+        <div id="custom-model-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-2xl bg-white space-y-4">
+                <div class="flex justify-between items-center"> <h3 class="text-xl font-bold text-gray-900">输入自定义模特特征</h3> <button id="close-custom-model-btn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button> </div>
+                <div> <textarea id="custom-model-input" rows="3" class="w-full rounded-lg border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500" placeholder="例如：25岁亚洲男性，身材健硕，深色皮肤，身高185cm，写实照片风格"></textarea> </div>
+                <div class="flex justify-end"> <button id="submit-custom-model" class="px-6 py-2 text-white font-bold rounded-full shadow-lg btn-primary">生成模特</button> </div>
+            </div>
+        </div>
+
+        <div id="try-on-prompt-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-2xl bg-white space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-bold text-gray-900">添加精准控制描述</h3>
+                    <button id="close-try-on-prompt-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                </div>
+                <div>
+                    <label for="try-on-prompt-input" class="block text-sm font-medium text-gray-700 mb-1">描述词 (选填)</label>
+                    <textarea id="try-on-prompt-input" rows="3" class="w-full rounded-lg border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500" placeholder="例如：让模特站在海滩背景前，傍晚的阳光"></textarea>
+                </div>
+                <div class="flex justify-end">
+                    <button id="submit-try-on-prompt" class="px-6 py-2 text-white font-bold rounded-full shadow-lg btn-quintenary">开始生成</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="modify-try-on-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-2xl bg-white space-y-4">
+                <div class="flex justify-between items-center"> <h3 class="text-xl font-bold text-gray-900">输入修改指令</h3> <button id="close-modify-try-on-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button> </div>
+                <div> <textarea id="modify-try-on-input" rows="3" class="w-full rounded-lg border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500" placeholder="例如：将背景换成街道，展示侧面效果"></textarea> </div>
+                <div class="flex justify-end"> <button id="submit-modify-try-on" class="px-6 py-2 text-white font-bold rounded-full shadow-lg btn-heptanary">确认修改</button> </div>
+            </div>
+        </div>
+        
+        <div id="generate-copy-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-2xl bg-white space-y-4">
+                <div class="flex justify-between items-center">
+                     <h3 class="text-xl font-bold text-gray-900">生成推广文案</h3>
+                     <button id="close-generate-copy-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                </div>
+                <div>
+                     <label for="generate-copy-input" class="block text-sm font-medium text-gray-700 mb-1">文案要求 (选填)</label>
+                     <textarea id="generate-copy-input" rows="3" class="w-full rounded-lg border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500" placeholder="例如：小红书风格，突出少女感和夏日清凉"></textarea>
+                </div>
+                <div class="flex justify-end">
+                     <button id="submit-generate-copy" class="px-6 py-2 text-white font-bold rounded-full shadow-lg btn-sidenary">生成文案</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="i2i-custom-detail-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-2xl bg-white space-y-4">
+                <div class="flex justify-between items-center"> <h3 class="text-xl font-bold text-gray-900">输入自定义修改指令</h3> <button id="i2i-close-custom-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button> </div>
+                <div> <textarea id="i2i-custom-detail-input" rows="3" class="w-full rounded-lg border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500" placeholder="例如：把这件T恤的颜色改成黑色"></textarea> </div>
+                <div class="flex justify-end"> <button id="i2i-submit-custom-detail" class="px-6 py-2 text-white font-bold rounded-full shadow-lg btn-quintenary">生成细节图</button> </div>
+            </div>
+        </div>
+
+        <div id="lineart-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+             <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-2/3 shadow-lg rounded-2xl bg-white space-y-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-2xl font-bold text-gray-900">设计线稿生成器 ✒️</h3>
+                    <button id="close-lineart-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                </div>
+                
+                <div class="p-4 border-b border-gray-200">
+                    <h4 class="text-xl font-semibold mb-2 text-center">从文本生成线稿</h4>
+                    <div class="flex space-x-2">
+                        <input type="text" id="lineart-input" class="flex-grow rounded-full border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500" placeholder="输入设计主题，例如：一件连衣裙">
+                        <button id="lineart-generate-btn" class="px-6 py-2 text-white font-bold rounded-full shadow-lg btn-sidenary">生成线稿</button>
+                    </div>
+                </div>
+                
+                <div id="lineart-loading-container" class="text-center py-8 hidden">
+                    <div class="spinner"></div>
+                    <p class="mt-2 text-sm font-medium text-gray-600">正在生成线稿...</p>
+                </div>
+
+                <div id="lineart-results" class="space-y-4 p-2 text-center">
+                </div>
+
+                <hr class="my-4">
+
+                <div class="p-4">
+                    <h4 class="text-xl font-semibold mb-2 text-center">上传图片再创作</h4>
+                     <div class="w-full max-w-md mx-auto">
+                        <label for="lineart-upload-input" class="block text-center p-6 rounded-lg cursor-pointer upload-zone">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                            <span class="mt-2 block text-sm font-medium text-gray-600">点击上传图片</span>
+                        </label>
+                        <input type="file" id="lineart-upload-input" class="hidden" accept="image/*">
+                        <div id="lineart-upload-preview-container" class="hidden text-center mt-4">
+                             <img id="lineart-upload-preview" class="mx-auto rounded-lg shadow-md" alt="Uploaded Image Preview">
+                        </div>
+                        <div id="lineart-upload-modification-container" class="hidden w-full max-w-md mx-auto mt-4 space-y-3">
+                            <label for="lineart-upload-modification-prompt" class="block text-sm font-medium text-gray-700">输入描述词修改图片：</label>
+                            <textarea id="lineart-upload-modification-prompt" rows="3" class="w-full rounded-lg border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500" placeholder="例如：给这件衣服上色，添加星空图案"></textarea>
+                            <button id="lineart-upload-modify-btn" class="w-full py-2 px-4 border border-transparent rounded-full shadow-lg text-base font-bold text-white btn-heptanary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500">生成新图片</button>
+                        </div>
+                         <div id="lineart-upload-loading-container" class="text-center py-8 hidden">
+                            <div class="spinner"></div>
+                            <p class="mt-2 text-sm font-medium text-gray-600">正在生成新图片...</p>
+                        </div>
+                        <div id="lineart-upload-generated-image-container" class="hidden text-center mt-6 relative">
+                            <img id="lineart-upload-generated-image" class="mx-auto rounded-lg shadow-md" alt="Generated Image from Upload">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="lineart-custom-detail-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-2xl bg-white space-y-4">
+                <div class="flex justify-between items-center"> <h3 class="text-xl font-bold text-gray-900">输入自定义修改指令</h3> <button id="lineart-close-custom-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button> </div>
+                <div> <textarea id="lineart-custom-detail-input" rows="3" class="w-full rounded-lg border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500" placeholder="例如：给这件衣服上色"></textarea> </div>
+                <div class="flex justify-end"> <button id="lineart-submit-custom-detail" class="px-6 py-2 text-white font-bold rounded-full shadow-lg btn-quintenary">生成</button> </div>
+            </div>
+        </div>
+        
+        <div id="encyclopedia-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+            <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-2/3 shadow-lg rounded-2xl bg-white space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-2xl font-bold text-gray-900">时尚百科全书 📖</h3>
+                    <button id="close-encyclopedia-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                </div>
+                <div class="flex space-x-2">
+                    <input type="text" id="encyclopedia-input" class="flex-grow rounded-full border border-gray-300 shadow-sm p-3 focus:border-indigo-500 focus:ring-indigo-500" placeholder="输入关键词搜索，例如：香奈儿">
+                    <button id="encyclopedia-search-btn" class="px-6 py-2 text-white font-bold rounded-full shadow-lg btn-primary">搜索</button>
+                </div>
+                <div id="encyclopedia-loading" class="text-center py-4 hidden">
+                    <div class="spinner"></div>
+                    <p class="mt-2 text-sm font-medium text-blue-600">正在检索信息库...</p>
+                </div>
+                <div id="encyclopedia-results" class="space-y-4 max-h-[60vh] overflow-y-auto p-2">
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+    // --- Start of Script ---
+    
+    // --- NEW: API URLs now point to our own server's proxy ---
+    const API_PROXY_BASE_URL = '/api/generateContent'; 
+    const GEMINI_API_URL = `${API_PROXY_BASE_URL}/gemini-1.5-flash`; // Model for text
+    const IMAGE_GENERATION_API_URL = `${API_PROXY_BASE_URL}/gemini-1.5-flash-image-preview-0827`; // Model for images
+    
+    const DAILY_API_LIMIT = 200; 
+    const USAGE_STORAGE_KEY = 'fashionApiUsage'; 
+    
+    // --- DOM Elements ---
+    const apiUsageCounter = document.getElementById('api-usage-counter');
+    const mainPage = document.getElementById('main-page');
+    const i2iPage = document.getElementById('i2i-page');
+    const promptInput = document.getElementById('prompt-input');
+    const refineBtn = document.getElementById('refine-btn');
+    const generateBtn = document.getElementById('generate-btn');
+    const storyBtn = document.getElementById('story-btn');
+    const detailBtn = document.getElementById('detail-btn');
+    const detailOptions = document.getElementById('detail-options');
+    const imageContainer = document.getElementById('image-container');
+    const generatedImage = document.getElementById('generated-image');
+    const detailImageContainer = document.getElementById('detail-image-container');
+    const detailImage = document.getElementById('detail-image');
+    const storyContainer = document.getElementById('story-container');
+    const storyButtonsContainer = document.getElementById('story-buttons-container');
+    const storyText = document.getElementById('story-text');
+    const storyPromptInput = document.getElementById('story-prompt-input');
+    const copyStoryBtn = document.getElementById('copy-story-btn');
+    const errorMessage = document.getElementById('error-message');
+    const errorText = document.getElementById('error-text');
+    const vocabModal = document.getElementById('vocab-modal');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const customDetailModal = document.getElementById('custom-detail-modal');
+    const closeCustomModalBtn = document.getElementById('close-custom-modal-btn');
+    const customDetailInput = document.getElementById('custom-detail-input');
+    const submitCustomDetailBtn = document.getElementById('submit-custom-detail');
+    const encyclopediaModal = document.getElementById('encyclopedia-modal');
+    const encyclopediaToggle = document.getElementById('encyclopedia-toggle');
+    const closeEncyclopediaModalBtn = document.getElementById('close-encyclopedia-modal-btn');
+    const encyclopediaInput = document.getElementById('encyclopedia-input');
+    const encyclopediaSearchBtn = document.getElementById('encyclopedia-search-btn');
+    const encyclopediaLoading = document.getElementById('encyclopedia-loading');
+    const encyclopediaResults = document.getElementById('encyclopedia-results');
+    const lineartModal = document.getElementById('lineart-modal');
+    const lineartBtn = document.getElementById('lineart-btn');
+    const closeLineartModalBtn = document.getElementById('close-lineart-modal-btn');
+    const lineartInput = document.getElementById('lineart-input');
+    const lineartGenerateBtn = document.getElementById('lineart-generate-btn');
+    const lineartResults = document.getElementById('lineart-results');
+    const lineartCustomDetailModal = document.getElementById('lineart-custom-detail-modal');
+    const lineartCloseCustomModalBtn = document.getElementById('lineart-close-custom-modal-btn');
+    const lineartCustomDetailInput = document.getElementById('lineart-custom-detail-input');
+    const lineartSubmitCustomDetailBtn = document.getElementById('lineart-submit-custom-detail');
+    const lineartUploadInput = document.getElementById('lineart-upload-input');
+    const lineartUploadPreviewContainer = document.getElementById('lineart-upload-preview-container');
+    const lineartUploadPreview = document.getElementById('lineart-upload-preview');
+    const lineartUploadModificationContainer = document.getElementById('lineart-upload-modification-container');
+    const lineartUploadModificationPrompt = document.getElementById('lineart-upload-modification-prompt');
+    const lineartUploadModifyBtn = document.getElementById('lineart-upload-modify-btn');
+    const lineartUploadGeneratedImageContainer = document.getElementById('lineart-upload-generated-image-container');
+    const lineartUploadGeneratedImage = document.getElementById('lineart-upload-generated-image');
+    const notebookToggle = document.getElementById('notebook-toggle');
+    const notebookPanel = document.getElementById('notebook-panel');
+    const notebookTextarea = document.getElementById('notebook-textarea');
+    const notebookStatus = document.getElementById('notebook-status');
+    const notebookCopyBtn = document.getElementById('notebook-copy-btn');
+    const notebookClearBtn = document.getElementById('notebook-clear-btn');
+    const notebookHeader = document.getElementById('notebook-header');
+    const generateModelBtn = document.getElementById('generate-model-btn');
+    const modelOptions = document.getElementById('model-options');
+    const customModelBtn = document.getElementById('custom-model-btn');
+    const customModelModal = document.getElementById('custom-model-modal');
+    const closeCustomModelBtn = document.getElementById('close-custom-model-btn');
+    const customModelInput = document.getElementById('custom-model-input');
+    const submitCustomModelBtn = document.getElementById('submit-custom-model');
+    const modelModificationContainer = document.getElementById('model-modification-container');
+    const showModifyModelInputBtn = document.getElementById('show-modify-model-input-btn');
+    const modifyModelInputArea = document.getElementById('modify-model-input-area');
+    const modifyModelPrompt = document.getElementById('modify-model-prompt');
+    const submitModelModificationBtn = document.getElementById('submit-model-modification-btn');
+    const i2iModelUploadInput = document.getElementById('i2i-model-upload-input');
+    const i2iGarmentUploadInput = document.getElementById('i2i-garment-upload-input');
+    const i2iModelPreviewContainer = document.getElementById('i2i-model-preview-container');
+    const i2iModelPreview = document.getElementById('i2i-model-preview');
+    const i2iGarmentPreviewContainer = document.getElementById('i2i-garment-preview-container');
+    const i2iGarmentPreview = document.getElementById('i2i-garment-preview');
+    const tryOnBtn = document.getElementById('try-on-btn');
+    const modifyTryOnBtn = document.getElementById('modify-try-on-btn');
+    const generateCopyBtn = document.getElementById('generate-copy-btn');
+    const tryOnPromptModal = document.getElementById('try-on-prompt-modal');
+    const closeTryOnPromptModalBtn = document.getElementById('close-try-on-prompt-modal-btn');
+    const tryOnPromptInput = document.getElementById('try-on-prompt-input');
+    const submitTryOnPromptBtn = document.getElementById('submit-try-on-prompt');
+    const modifyTryOnModal = document.getElementById('modify-try-on-modal');
+    const closeModifyTryOnModalBtn = document.getElementById('close-modify-try-on-modal-btn');
+    const modifyTryOnInput = document.getElementById('modify-try-on-input');
+    const submitModifyTryOnBtn = document.getElementById('submit-modify-try-on');
+    const i2iGeneratedImageContainer = document.getElementById('i2i-generated-image-container');
+    const i2iBeforeContainer = document.getElementById('i2i-before-container');
+    const i2iBeforeImage = document.getElementById('i2i-before-image');
+    const i2iAfterContainer = document.getElementById('i2i-after-container');
+    const i2iGeneratedImage = document.getElementById('i2i-generated-image');
+    const i2iCustomDetailModal = document.getElementById('i2i-custom-detail-modal');
+    const i2iCloseCustomModalBtn = document.getElementById('i2i-close-custom-modal-btn');
+    const i2iCustomDetailInput = document.getElementById('i2i-custom-detail-input');
+    const i2iSubmitCustomDetailBtn = document.getElementById('i2i-submit-custom-detail');
+    const generateCopyModal = document.getElementById('generate-copy-modal');
+    const closeGenerateCopyModalBtn = document.getElementById('close-generate-copy-modal-btn');
+    const generateCopyInput = document.getElementById('generate-copy-input');
+    const submitGenerateCopyBtn = document.getElementById('submit-generate-copy');
+    const copyDisplayContainer = document.getElementById('copy-display-container');
+    const generatedCopyText = document.getElementById('generated-copy-text');
+    const copyGeneratedTextBtn = document.getElementById('copy-generated-text-btn');
+    const goToI2IButton = document.getElementById('go-to-i2i');
+    const goToMainButton = document.getElementById('go-to-main');
+    
+    // Auth DOM Elements
+    const authModalOverlay = document.getElementById('auth-modal-overlay');
+    const authModal = document.getElementById('auth-modal');
+    const appContainer = document.getElementById('app-container');
+    const phoneInput = document.getElementById('phone-input');
+    const codeInput = document.getElementById('code-input');
+    const sendCodeBtn = document.getElementById('send-code-btn');
+    const loginBtn = document.getElementById('login-btn');
+    const authErrorMsg = document.getElementById('auth-error-msg');
+
+    // Loading Containers
+    const mainLoadingContainer = document.getElementById('main-loading-container');
+    const detailLoadingContainer = document.getElementById('detail-loading-container');
+    const i2iLoadingContainer = document.getElementById('i2i-loading-container');
+    const lineartLoadingContainer = document.getElementById('lineart-loading-container');
+    const lineartUploadLoadingContainer = document.getElementById('lineart-upload-loading-container');
+
+    // --- State Variables ---
+    let currentImageData = null;
+    let currentLineArtData = null;
+    let uploadedLineartImageData = null;
+    let uploadedModelData = null;
+    let uploadedGarmentData = null;
+    let currentTryOnResultData = null; 
+    let originalTryOnResultData = null;
+
+    // --- NEW: Authentication Functions ---
+    function showLogin() {
+        authModalOverlay.classList.remove('hidden');
+        authModal.classList.remove('hidden');
+        appContainer.classList.add('blurred');
+    }
+
+    function hideLogin() {
+        authModalOverlay.classList.add('hidden');
+        authModal.classList.add('hidden');
+        appContainer.classList.remove('blurred');
+    }
+
+    async function handleSendCode() {
+        const phone = phoneInput.value;
+        if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
+            authErrorMsg.textContent = '请输入有效的手机号码';
+            return;
+        }
+        authErrorMsg.textContent = '';
+        sendCodeBtn.disabled = true;
+        sendCodeBtn.textContent = '发送中...';
+        try {
+            const response = await fetch('/api/send-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || '发送失败');
+            
+            authErrorMsg.textContent = '验证码已发送';
+            let countdown = 60;
+            const interval = setInterval(() => {
+                sendCodeBtn.textContent = `${countdown}s`;
+                countdown--;
+                if (countdown < 0) {
+                    clearInterval(interval);
+                    sendCodeBtn.textContent = '发送验证码';
+                    sendCodeBtn.disabled = false;
+                }
+            }, 1000);
+        } catch (error) {
+            authErrorMsg.textContent = error.message;
+            sendCodeBtn.textContent = '发送验证码';
+            sendCodeBtn.disabled = false;
+        }
+    }
+
+    async function handleLogin() {
+        const phone = phoneInput.value;
+        const code = codeInput.value;
+        if (!phone || !code) {
+            authErrorMsg.textContent = '手机号和验证码不能为空';
+            return;
+        }
+        authErrorMsg.textContent = '';
+        loginBtn.disabled = true;
+
+        try {
+            const response = await fetch('/api/verify-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone, code })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || '登录失败');
+
+            if (result.success && result.token) {
+                localStorage.setItem('userToken', result.token);
+                hideLogin();
+            }
+        } catch (error) {
+            authErrorMsg.textContent = error.message;
+        } finally {
+            loginBtn.disabled = false;
+        }
+    }
+
+    // --- 调试版：请用这段代码替换掉你 index.html 中原来的 fetchWithRetry 函数 ---
+async function fetchWithRetry(url, options, retries = 3) {
+    const token = localStorage.getItem('userToken');
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+    };
+    
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await fetch(url, { ...options, headers });
+            
+            // --- 调试代码开始 ---
+            console.log("服务器响应状态:", response.status, response.statusText);
+            if (!response.ok) {
+                // 在解析json之前，先尝试读取文本内容
+                const rawText = await response.text();
+                console.error("服务器返回了错误，原始文本内容是:", rawText);
+                // 尝试将文本作为JSON解析
+                try {
+                    const errorData = JSON.parse(rawText);
+                    const errorMessage = errorData.error?.message || `HTTP Error: ${response.status}`;
+                    throw new Error(errorMessage);
+                } catch (e) {
+                    // 如果解析失败，说明返回的不是JSON，可能是HTML错误页
+                    throw new Error(`服务器返回了非JSON格式的错误(状态码: ${response.status})`);
+                }
+            }
+            // --- 调试代码结束 ---
+
+            return await response.json(); 
+        } catch (error) {
+            console.error(`第 ${i + 1} 次尝试失败:`, error);
+            if (i === retries - 1) throw error;
+            await new Promise(res => setTimeout(res, 1000 * (i + 1)));
+        }
+    }
+}
+    // --- Core Functions (Largely Unchanged) ---
+    const getRandomElement = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    function generateRandomizedModelPrompt(modelType) { let prompt = ""; const sketchPoses = ['dynamic walking pose', 'elegant turning pose', 'classic contrapposto stance', 'energetic leaping pose', 'relaxed sitting pose', 'dramatic high fashion pose']; const photoPoses = ['standing confidently', 'walking towards camera', 'leaning against a plain wall', 'sitting on a simple stool', 'a dynamic mid-motion pose', 'a classic studio portrait pose']; const photoExpressions = ['a gentle smile', 'a neutral confident look', 'a joyful laugh', 'a thoughtful gaze', 'a powerful, direct stare', 'a serene expression']; const photoLenses = ['shot on a Canon EOS R5 with 85mm f/1.2 lens', 'shot on a Sony A7R IV with 135mm f/1.8 lens', 'shot on a Hasselblad X2D with 55mm f/2.5 lens', 'shot with a 50mm f/1.4 prime lens', 'captured with a 100mm macro lens for detail']; switch (modelType) { case 'sketch-asian': prompt = `Full body fashion illustration of a chic Asian model in a ${getRandomElement(sketchPoses)}. Expressive, clean, minimalist line art. Plain white background, perfect for a clothing design mockup.`; break; case 'sketch-black': prompt = `Full body fashion illustration of a graceful Black model in a ${getRandomElement(sketchPoses)}. Bold, dynamic, and expressive line art. Plain white background, perfect for a clothing design mockup.`; break; case 'sketch-european': prompt = `Full body fashion illustration of an elegant European model in a ${getRandomElement(sketchPoses)}. Sophisticated, fluid, and artistic line art. Plain white background, perfect for a clothing design mockup.`; break; case 'photo-asian': prompt = `Ultra-photorealistic full body photo of a professional young Asian female fashion model, ${getRandomElement(photoPoses)}, ${getRandomElement(photoExpressions)}. Plain studio background, professional lighting, ${getRandomElement(photoLenses)}.`; break; case 'photo-black': prompt = `Ultra-photorealistic full body photo of a professional young Black female fashion model, ${getRandomElement(photoPoses)}, ${getRandomElement(photoExpressions)}. Plain studio background, professional lighting, ${getRandomElement(photoLenses)}.`; break; case 'photo-european': prompt = `Ultra-photorealistic full body photo of a professional young Caucasian female fashion model, ${getRandomElement(photoPoses)}, ${getRandomElement(photoExpressions)}. Plain studio background, professional lighting, ${getRandomElement(photoLenses)}.`; break; } return prompt; }
+    const vocabData = { '款式类别': { 'T恤': 'T-shirt', '连衣裙': 'Dress', '夹克': 'Jacket', '风衣': 'Trench coat', '卫衣': 'Hoodie', '裤子': 'Pants', '半身裙': 'Skirt', '西装': 'Blazer', '衬衫': 'Shirt', '毛衣': 'Sweater' }, '设计风格': { '赛博朋克': 'Cyberpunk', '哥特': 'Gothic', '复古': 'Vintage', '极简主义': 'Minimalist', '街头潮流': 'Streetwear', '波西米亚': 'Bohemian', '学院风': 'Preppy', '运动休闲': 'Athleisure', '未来主义': 'Futuristic', '废土风': 'Post-apocalyptic' }, '面料材质': { '丝绸': 'Silk', '牛仔布': 'Denim', '皮革': 'Leather', '棉布': 'Cotton', '羊毛': 'Wool', '科技面料': 'Techwear fabric', '雪纺': 'Chiffon', '天鹅绒': 'Velvet', '网纱': 'Mesh', '反光材料': 'Reflective material' }, '图案印花': { '格纹': 'Plaid', '条纹': 'Stripes', '花卉': 'Floral print', '抽象几何': 'Abstract geometric pattern', '动物纹': 'Animal print', '扎染': 'Tie-dye', '纯色': 'Solid color', 'logo印花': 'Logo print' }, '细节剪裁': { '不对称': 'Asymmetrical cut', '高腰': 'High-waisted', '多口袋': 'Multiple pockets', '拉链': 'Zippers', '宽松版型': 'Oversized fit', '修身版型': 'Slim fit', '荷叶边': 'Ruffles', '流苏': 'Fringes', '镂空': 'Cut-out details', '拼接': 'Patchwork' }, '色彩搭配': { '莫兰迪色系': 'Morandi color palette', '霓虹色': 'Neon colors', '黑白灰': 'Monochromatic black and white', '大地色系': 'Earth tones', '撞色': 'Color blocking', '渐变色': 'Gradient colors' } };
+    function createVocabButtons() { const containers = { '款式类别': document.getElementById('style-type-buttons'), '设计风格': document.getElementById('aesthetic-buttons'), '面料材质': document.getElementById('material-buttons'), '图案印花': document.getElementById('pattern-buttons'), '细节剪裁': document.getElementById('details-buttons'), '色彩搭配': document.getElementById('color-buttons') }; for (const category in vocabData) { const container = containers[category]; if (!container) continue; for (const term in vocabData[category]) { const button = createButton(term); container.appendChild(button); } } }
+    function createButton(chineseTerm) { const button = document.createElement('button'); button.textContent = chineseTerm; button.className = 'px-4 py-2 text-sm font-medium rounded-full bg-gray-100 hover:bg-indigo-100 text-gray-700 hover:text-indigo-700 transition-colors'; button.onclick = () => { let currentText = promptInput.value.trim(); const termToAdd = button.textContent; if (currentText && currentText.length > 0) { promptInput.value += `, ${termToAdd}`; } else { promptInput.value = termToAdd; } promptInput.dispatchEvent(new Event('input')); }; return button; }
+    function toggleCategoryButtons(targetId) { const element = document.getElementById(targetId); if(element) { element.classList.toggle('hidden'); } }
+    function getApiUsage() { const usage = localStorage.getItem(USAGE_STORAGE_KEY); return usage ? JSON.parse(usage) : { date: new Date().toISOString().split('T')[0], count: 0 }; }
+    function updateUsageCounterUI() { const usage = getApiUsage(); const today = new Date().toISOString().split('T')[0]; let remaining = (usage.date === today) ? DAILY_API_LIMIT - usage.count : DAILY_API_LIMIT; remaining = Math.max(0, remaining); apiUsageCounter.textContent = remaining; apiUsageCounter.classList.toggle('text-red-600', remaining <= 0); apiUsageCounter.classList.toggle('font-bold', remaining <= 0); }
+    function checkApiLimit() { let usage = getApiUsage(); const today = new Date().toISOString().split('T')[0]; if (usage.date !== today) { localStorage.setItem(USAGE_STORAGE_KEY, JSON.stringify({ date: today, count: 0 })); updateUsageCounterUI(); return true; } if (usage.count >= DAILY_API_LIMIT) { showErrorMessage(`您已达到今日 ${DAILY_API_LIMIT} 次的使用上限，请明天再来。`); return false; } return true; }
+    function incrementApiUsage() { let usage = getApiUsage(); const today = new Date().toISOString().split('T')[0]; usage.count = (usage.date === today) ? usage.count + 1 : 1; usage.date = today; localStorage.setItem(USAGE_STORAGE_KEY, JSON.stringify(usage)); updateUsageCounterUI(); }
+    function showErrorMessage(message) { mainLoadingContainer.classList.add('hidden'); detailLoadingContainer.classList.add('hidden'); i2iLoadingContainer.classList.add('hidden'); lineartLoadingContainer.classList.add('hidden'); lineartUploadLoadingContainer.classList.add('hidden'); errorMessage.classList.remove('hidden'); errorText.textContent = `错误: ${message}`; }
+    function addDownloadButton(containerElement, base64Data, filename) { if (!containerElement) return; let downloadLink = containerElement.querySelector('.download-btn'); if (!downloadLink) { downloadLink = document.createElement('a'); downloadLink.className = 'download-btn absolute bottom-2 right-2 p-2 bg-black bg-opacity-50 rounded-full hover:bg-opacity-75 transition-opacity z-10'; downloadLink.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>`; containerElement.appendChild(downloadLink); } downloadLink.href = `data:image/png;base64,${base64Data}`; downloadLink.download = filename; }
+    async function getEnglishTranslation(chineseText, context = "fashion design term") { if (!checkApiLimit()) return null; const payload = { contents: [{ parts: [{ text: `Translate the following Chinese ${context} into English. IMPORTANT: Respond with ONLY the translated text, without any introductory phrases, explanations, or quotation marks. Chinese text: "${chineseText}"` }] }] }; const response = await fetchWithRetry(GEMINI_API_URL, { method: 'POST', body: JSON.stringify(payload) }); incrementApiUsage(); return response?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().replace(/["'.]/g, '') || null;}
+    async function generateImageFromPrompt(prompt, loadingText) { mainLoadingContainer.querySelector('p').textContent = loadingText; mainLoadingContainer.classList.remove('hidden'); [refineBtn, generateBtn, storyBtn, detailBtn, lineartBtn, generateModelBtn].forEach(btn => btn.disabled = true); storyContainer.classList.add('hidden'); detailImage.classList.add('hidden'); generatedImage.classList.add('hidden'); currentImageData = null; storyButtonsContainer.classList.add('hidden'); modelModificationContainer.classList.add('hidden'); modifyModelInputArea.classList.add('hidden'); try { const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ["IMAGE"] }, }; const response = await fetchWithRetry(IMAGE_GENERATION_API_URL, { method: 'POST', body: JSON.stringify(payload) }); incrementApiUsage(); const base64Data = response?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data; if (base64Data) { generatedImage.src = `data:image/png;base64,${base64Data}`; generatedImage.classList.remove('hidden'); addDownloadButton(imageContainer, base64Data, 'generated-image.png'); currentImageData = base64Data; if (loadingText.includes('模特')) { modelModificationContainer.classList.remove('hidden'); } else if (loadingText.includes('拍摄')) { storyBtn.disabled = false; detailBtn.disabled = false; storyButtonsContainer.classList.remove('hidden'); storyPromptInput.value = `请根据这张服装设计图，结合最初的设计理念 "${promptInput.value.trim()}"，撰写一段专业、吸引人的设计说明。`; } } else { showErrorMessage("图片生成失败或内容被拦截。"); } } catch (error) { showErrorMessage(error.message); } finally { mainLoadingContainer.classList.add('hidden'); [refineBtn, generateBtn, lineartBtn, generateModelBtn].forEach(btn => btn.disabled = false); generateBtn.disabled = !promptInput.value.trim().length; } }
+    async function generateStory() { if (!currentImageData || !checkApiLimit()) return; storyContainer.classList.remove('hidden'); storyText.textContent = '正在生成设计说明...'; document.getElementById('story-action-buttons').classList.add('hidden'); storyBtn.disabled = true; detailBtn.disabled = true; try { const userInstruction = storyPromptInput.value.trim() || `请根据这张服装设计图，结合最初的设计理念 "${promptInput.value.trim()}"，撰写一段专业、吸引人的设计说明。请只用中文回答。`; const payload = { contents: [{ role: "user", parts: [{ text: userInstruction }, { inlineData: { mimeType: "image/png", data: currentImageData } }] }] }; const response = await fetchWithRetry(GEMINI_API_URL, { method: 'POST', body: JSON.stringify(payload) }); incrementApiUsage(); const storyContent = response?.candidates?.[0]?.content?.parts?.[0]?.text; if (storyContent) { storyText.textContent = storyContent; document.getElementById('story-action-buttons').classList.remove('hidden'); } else { storyText.textContent = `生成说明失败，未收到有效内容。`; } } catch (error) { storyText.textContent = `生成说明失败: ${error.message}`; } finally { storyBtn.disabled = false; detailBtn.disabled = false; } }
+    async function generateModifiedImage(prompt, loadingMessageText = '正在生成修改图...') { if (!currentImageData || !checkApiLimit()) return; detailLoadingContainer.querySelector('p').textContent = loadingMessageText; detailLoadingContainer.classList.remove('hidden'); detailImage.classList.add('hidden'); const finalPrompt = `Based on the provided image, modify it according to the following instruction: "${prompt}"`; const payload = { contents: [{ role: "user", parts: [{ text: finalPrompt }, { inlineData: { mimeType: "image/png", data: currentImageData } }] }], generationConfig: { responseModalities: ["IMAGE"] }, }; try { const response = await fetchWithRetry(IMAGE_GENERATION_API_URL, { method: 'POST', body: JSON.stringify(payload) }); incrementApiUsage(); const base64Data = response?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data; if (base64Data) { detailImage.src = `data:image/png;base64,${base64Data}`; detailImage.classList.remove('hidden'); addDownloadButton(detailImage.parentElement, base64Data, 'modified-image.png'); } else { showErrorMessage("修改图生成失败。"); } } catch (error) { showErrorMessage(error.message); } finally { detailLoadingContainer.classList.add('hidden'); } }
+    function handleI2IFileUpload(file, type, previewElement, containerElement, inputElement) { if (!file) return; const reader = new FileReader(); reader.onload = (e) => { const base64String = e.target.result.split(',')[1]; const label = inputElement.parentElement; if (type === 'model') { uploadedModelData = base64String; label.classList.add('has-image'); } else if (type === 'garment') { uploadedGarmentData = base64String; label.classList.add('has-image'); } else if (type === 'lineart') { uploadedLineartImageData = base64String; lineartUploadModificationContainer.classList.remove('hidden'); lineartUploadGeneratedImageContainer.classList.add('hidden'); } previewElement.src = e.target.result; containerElement.classList.remove('hidden'); label.querySelector('span').textContent = "更换图片"; if (uploadedModelData && uploadedGarmentData) { tryOnBtn.disabled = false; } }; reader.readAsDataURL(file); }
+    async function performTryOn(userPrompt = '') { if (!uploadedModelData || !uploadedGarmentData || !checkApiLimit()) return; i2iLoadingContainer.querySelector('p').textContent = '正在生成穿搭效果图...'; i2iLoadingContainer.classList.remove('hidden'); i2iGeneratedImage.classList.add('hidden'); modifyTryOnBtn.classList.add('hidden'); generateCopyBtn.classList.add('hidden'); i2iBeforeContainer.classList.add('hidden'); copyDisplayContainer.classList.add('hidden'); try { let finalTryOnPrompt = `You are a professional virtual try-on assistant. In the provided images, one is a model and the other is a piece of clothing. Your task is to accurately place the clothing onto the model. IMPORTANT: If the garment image appears to be a sketch, line art, or drawing, first interpret and render it as a photorealistic object. Then, seamlessly integrate this realistic garment onto the model, ensuring correct scale, perspective, lighting, and shadows for a natural, photorealistic final composite. The image with the person is the model.`; if (userPrompt) { finalTryOnPrompt += ` Additionally, apply the following details: "${userPrompt}"`; } const payload = { contents: [{ role: "user", parts: [ { text: finalTryOnPrompt }, { inlineData: { mimeType: "image/jpeg", data: uploadedModelData } }, { inlineData: { mimeType: "image/jpeg", data: uploadedGarmentData } } ] }], generationConfig: { responseModalities: ["IMAGE"] }, }; const response = await fetchWithRetry(IMAGE_GENERATION_API_URL, { method: 'POST', body: JSON.stringify(payload) }); incrementApiUsage(); const base64Data = response?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data; if (base64Data) { originalTryOnResultData = base64Data; currentTryOnResultData = base64Data; i2iGeneratedImage.src = `data:image/png;base64,${base64Data}`; i2iGeneratedImageContainer.classList.remove('hidden'); i2iGeneratedImage.classList.remove('hidden'); modifyTryOnBtn.classList.remove('hidden'); addDownloadButton(i2iAfterContainer, base64Data, 'try-on-result.png'); } else { showErrorMessage("生成效果图失败。"); } } catch (error) { showErrorMessage(error.message); } finally { i2iLoadingContainer.classList.add('hidden'); } }
+    async function performModification() { const modificationPrompt = modifyTryOnInput.value.trim(); if (!modificationPrompt || !originalTryOnResultData || !checkApiLimit()) return; modifyTryOnModal.classList.add('hidden'); i2iLoadingContainer.querySelector('p').textContent = '正在修改效果图...'; i2iLoadingContainer.classList.remove('hidden'); i2iGeneratedImage.classList.add('hidden'); try { const finalPrompt = `Based on the provided image of a model wearing a garment, modify it according to the following instruction: "${modificationPrompt}"`; const payload = { contents: [{ role: "user", parts: [{ text: finalPrompt }, { inlineData: { mimeType: "image/png", data: originalTryOnResultData } }] }], generationConfig: { responseModalities: ["IMAGE"] }, }; const response = await fetchWithRetry(IMAGE_GENERATION_API_URL, { method: 'POST', body: JSON.stringify(payload) }); incrementApiUsage(); const base64Data = response?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data; if (base64Data) { i2iBeforeImage.src = `data:image/png;base64,${originalTryOnResultData}`; addDownloadButton(i2iBeforeContainer, originalTryOnResultData, 'try-on-original.png'); i2iBeforeContainer.classList.remove('hidden'); currentTryOnResultData = base64Data; i2iGeneratedImage.src = `data:image/png;base64,${base64Data}`; addDownloadButton(i2iAfterContainer, base64Data, 'try-on-modified.png'); generateCopyBtn.classList.remove('hidden'); modifyTryOnInput.value = ''; } else { showErrorMessage("修改失败。"); } } catch (error) { showErrorMessage(error.message); } finally { i2iLoadingContainer.classList.add('hidden'); i2iGeneratedImage.classList.remove('hidden');} }
+    async function performGenerateCopy() { if (!currentTryOnResultData || !checkApiLimit()) return; generateCopyModal.classList.add('hidden'); i2iLoadingContainer.querySelector('p').textContent = '正在生成文案...'; i2iLoadingContainer.classList.remove('hidden'); copyDisplayContainer.classList.add('hidden'); try { const userInput = generateCopyInput.value.trim(); const prompt = `请根据这张图片，撰写一段推广文案。文案要求如下：'${userInput}'。如果没有要求，请自由发挥，例如创作一段小红书风格的文案。请只用中文回答。`; const payload = { contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: "image/png", data: currentTryOnResultData } }] }] }; const response = await fetchWithRetry(GEMINI_API_URL, { method: 'POST', body: JSON.stringify(payload) }); incrementApiUsage(); const copyContent = response?.candidates?.[0]?.content?.parts?.[0]?.text; if (copyContent) { generatedCopyText.textContent = copyContent; copyDisplayContainer.classList.remove('hidden'); } else { showErrorMessage("文案生成失败。"); } generateCopyInput.value = ''; } catch(error) { showErrorMessage(error.message); } finally { i2iLoadingContainer.classList.add('hidden'); } }
+    async function handleUploadedLineartModify() { const prompt = lineartUploadModificationPrompt.value.trim(); if (!prompt || !uploadedLineartImageData) { showErrorMessage("请先上传图片并输入修改指令。"); return; } if (!checkApiLimit()) return; lineartUploadLoadingContainer.classList.remove('hidden'); lineartUploadGeneratedImageContainer.classList.add('hidden'); const modifyPrompt = `Based on the provided image, redraw it with the following modification: "${prompt}"`; const payload = { contents: [{ role: "user", parts: [ { text: modifyPrompt }, { inlineData: { mimeType: "image/png", data: uploadedLineartImageData } } ] }], generationConfig: { responseModalities: ["IMAGE"] }, }; try { const response = await fetchWithRetry(IMAGE_GENERATION_API_URL, { method: 'POST', body: JSON.stringify(payload) }); incrementApiUsage(); const base64Data = response?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data; if (base64Data) { const imageUrl = `data:image/png;base64,${base64Data}`; lineartUploadGeneratedImage.src = imageUrl; lineartUploadGeneratedImageContainer.classList.remove('hidden'); addDownloadButton(lineartUploadGeneratedImageContainer, base64Data, 'lineart-upload-modified.png'); } else { showErrorMessage('生成新图片失败，请稍后再试。'); } } catch (error) { showErrorMessage(`生成失败: ${error.message}`); } finally { lineartUploadLoadingContainer.classList.add('hidden'); } }
+    async function handleLineartModify(prompt) { if (!prompt || !currentLineArtData || !checkApiLimit()) return; const modifiedWrapper = document.getElementById('lineart-modified-wrapper'); modifiedWrapper.innerHTML = `<div class="text-center py-8"><div class="spinner"></div><p class="mt-2 text-sm font-medium text-gray-600">正在润色...</p></div>`; const modifyPrompt = `Based on the provided fashion line art, redraw it with the following modification: "${prompt}"`; const payload = { contents: [{ role: "user", parts: [{ text: modifyPrompt }, { inlineData: { mimeType: "image/png", data: currentLineArtData } }] }], generationConfig: { responseModalities: ["IMAGE"] }, }; try { const response = await fetchWithRetry(IMAGE_GENERATION_API_URL, { method: 'POST', body: JSON.stringify(payload) }); incrementApiUsage(); const base64Data = response?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data; if (base64Data) { const imageUrl = `data:image/png;base64,${base64Data}`; modifiedWrapper.innerHTML = `<img src="${imageUrl}" class="max-w-full h-auto mx-auto rounded-lg shadow-md" alt="Modified Line Art">`; addDownloadButton(modifiedWrapper, base64Data, 'lineart-modified.png'); } else { showErrorMessage('润色失败，请稍后再试。'); modifiedWrapper.innerHTML = ''; } } catch (error) { showErrorMessage(`润色失败: ${error.message}`); modifiedWrapper.innerHTML = ''; } }
+    async function handleEncyclopediaSearch() { const query = encyclopediaInput.value.trim(); if (!query || !checkApiLimit()) return; encyclopediaLoading.classList.remove('hidden'); encyclopediaResults.innerHTML = ''; try { const payload = { contents: [{ parts: [{ text: `Use Google Search to find information about the fashion term "${query}" and provide a concise summary. Respond in Chinese.` }] }], tools: [{ "google_search": {} }]}; const response = await fetchWithRetry(GEMINI_API_URL, { method: 'POST', body: JSON.stringify(payload) }); incrementApiUsage(); const encyclopediaContent = response?.candidates?.[0]?.content?.parts?.[0]?.text; if (encyclopediaContent) { encyclopediaResults.innerHTML = `<p class="text-gray-700">${encyclopediaContent.replace(/\n/g, '<br>')}</p>`; } else { encyclopediaResults.innerHTML = `<p class="text-center text-gray-500">未能检索到相关信息。</p>`; } } catch (error) { showErrorMessage(error.message); } finally { encyclopediaLoading.classList.add('hidden'); } }
+    async function handleLineartGeneration() { const query = lineartInput.value.trim(); if (!query || !checkApiLimit()) return; lineartLoadingContainer.classList.remove('hidden'); lineartResults.innerHTML = ''; currentLineArtData = null; try { const englishQuery = await getEnglishTranslation(query, "clothing item"); if (!englishQuery) { showErrorMessage("无法翻译输入内容，请重试。"); lineartLoadingContainer.classList.add('hidden'); return; } const lineArtStyles = [ `A clean, elegant, minimalist fashion line art of: "${englishQuery}". Focus on flowing, continuous lines and a simple, sophisticated silhouette. Black ink on a pure white background, vector style.`, `A dynamic, energetic fashion sketch of: "${englishQuery}". Emphasize movement with loose, expressive, and sketchy lines. Use cross-hatching for subtle texture. Black pencil on a white background.`, `A detailed, technical yet artistic fashion illustration line drawing of: "${englishQuery}". Precise, clean linework that clearly defines seams, drape, and fabric texture. Presented as a professional technical flat sketch.`, `A bold, graphic-style fashion line art of: "${englishQuery}". Use thick, confident outlines and high contrast. Minimalist details inside the silhouette to focus on the overall shape. Looks like a modern vector icon.` ]; const lineArtPrompt = getRandomElement(lineArtStyles); const payload = { contents: [{ parts: [{ text: lineArtPrompt }] }], generationConfig: { responseModalities: ["IMAGE"] }, }; const response = await fetchWithRetry(IMAGE_GENERATION_API_URL, { method: 'POST', body: JSON.stringify(payload) }); incrementApiUsage(); const base64Data = response?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data; if (base64Data) { currentLineArtData = base64Data; const imageUrl = `data:image/png;base64,${base64Data}`; lineartResults.innerHTML = ` <div class="flex flex-col gap-4 items-center"> <div id="lineart-original-wrapper" class="relative"> <img src="${imageUrl}" class="max-w-full h-auto mx-auto rounded-lg shadow-md" alt="Original Line Art"> </div> <div id="lineart-modified-wrapper" class="relative"></div> </div> <div id="lineart-controls" class="mt-4 flex flex-col sm:flex-row justify-center items-center gap-4"> <div class="relative"> <button id="lineart-modify-btn" class="px-6 py-2 text-white font-bold rounded-full shadow-lg btn btn-quintenary"> <span>润色 🎨</span> </button> <div id="lineart-modify-options" class="absolute bottom-full mb-2 w-max bg-white rounded-md shadow-lg z-10 hidden text-left"> <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 font-bold" data-detail-prompt="custom">更多细节... (手动输入)</a> <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-detail-prompt="Color this line art with a simple, flat color palette.">一键上色</a> <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-detail-prompt="Redraw this in a more minimalist, simplified style.">更极简</a> <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-detail-prompt="Redraw this with more intricate and exquisite details.">更精致</a> </div> </div> </div> `; addDownloadButton(document.getElementById('lineart-original-wrapper'), base64Data, 'lineart-original.png'); document.getElementById('lineart-modify-btn').addEventListener('click', () => { document.getElementById('lineart-modify-options').classList.toggle('hidden'); }); document.getElementById('lineart-modify-options').addEventListener('click', (event) => { event.preventDefault(); if (event.target.tagName !== 'A') return; const detailPrompt = event.target.dataset.detailPrompt; document.getElementById('lineart-modify-options').classList.add('hidden'); if (detailPrompt === 'custom') { lineartCustomDetailModal.classList.remove('hidden'); } else { handleLineartModify(detailPrompt); } }); } else { lineartResults.innerHTML = `<p class="text-center text-gray-500">无法生成线稿，请尝试其他关键词。</p>`; } } catch (error) { lineartResults.innerHTML = `<p class="text-center text-red-500">生成失败：${error.message}</p>`; } finally { lineartLoadingContainer.classList.add('hidden'); } }
+
+    // --- Event Listeners Setup ---
+    function setupEventListeners() {
+        createVocabButtons();
+        updateUsageCounterUI();
+        notebookTextarea.value = localStorage.getItem('fashionNotebookContent') || '';
+        document.querySelectorAll('#vocab-modal h4[data-target]').forEach(title => { title.addEventListener('click', () => toggleCategoryButtons(title.dataset.target)); });
+        lineartUploadInput.addEventListener('change', (e) => handleI2IFileUpload(e.target.files[0], 'lineart', lineartUploadPreview, lineartUploadPreviewContainer, e.target));
+        promptInput.addEventListener('input', () => generateBtn.disabled = !promptInput.value.trim().length);
+        generateBtn.addEventListener('click', async () => { 
+            mainLoadingContainer.querySelector('p').textContent = '正在翻译描述...';
+            mainLoadingContainer.classList.remove('hidden');
+            generatedImage.classList.add('hidden');
+            [refineBtn, generateBtn, lineartBtn, generateModelBtn].forEach(btn => btn.disabled = true);
+            try { 
+                const englishText = await getEnglishTranslation(promptInput.value.trim(), "fashion design concept");
+                if (englishText) { 
+                    const photoStyles = [
+                        `Professional high-resolution product photography of a ${englishText}, studio lighting, plain background.`,
+                        `A full-body, professional fashion photoshoot of a model wearing a ${englishText}, studio lighting, plain background.`
+                    ];
+                    const finalPrompt = getRandomElement(photoStyles);
+                    await generateImageFromPrompt(finalPrompt, 'AI 摄影师正在拍摄中...'); 
+                } 
+                else { 
+                    showErrorMessage("无法翻译您的输入，请检查内容或稍后重试。");
+                    mainLoadingContainer.classList.add('hidden');
+                    [refineBtn, generateBtn, lineartBtn, generateModelBtn].forEach(btn => btn.disabled = false);
+                    generateBtn.disabled = !promptInput.value.trim().length;
+                }
+            } catch(e) { 
+                showErrorMessage(e.message); 
+                mainLoadingContainer.classList.add('hidden');
+                [refineBtn, generateBtn, lineartBtn, generateModelBtn].forEach(btn => btn.disabled = false);
+                generateBtn.disabled = !promptInput.value.trim().length;
+            } 
+        });
+        generateModelBtn.addEventListener('click', () => modelOptions.classList.toggle('hidden'));
+        modelOptions.addEventListener('click', (e) => { e.preventDefault(); if (e.target.tagName === 'A' && e.target.dataset.modelType) { modelOptions.classList.add('hidden'); generateImageFromPrompt(generateRandomizedModelPrompt(e.target.dataset.modelType), '正在生成多样化模特...'); } });
+        customModelBtn.addEventListener('click', (e) => { e.preventDefault(); modelOptions.classList.add('hidden'); customModelModal.classList.remove('hidden'); });
+        closeCustomModelBtn.addEventListener('click', () => customModelModal.classList.add('hidden'));
+        submitCustomModelBtn.addEventListener('click', () => { const customPrompt = `Full body shot of a fashion model with the following characteristics: ${customModelInput.value.trim()}. Standing pose, studio lighting, plain background.`; if (customModelInput.value.trim()) { customModelModal.classList.add('hidden'); generateImageFromPrompt(customPrompt, '正在生成自定义模特...'); customModelInput.value = ''; } });
+        storyBtn.addEventListener('click', generateStory);
+        detailBtn.addEventListener('click', () => detailOptions.classList.toggle('hidden'));
+        detailOptions.addEventListener('click', (e) => { e.preventDefault(); if (e.target.tagName === 'A') { const prompt = e.target.dataset.detailPrompt; detailOptions.classList.add('hidden'); prompt === 'custom' ? customDetailModal.classList.remove('hidden') : generateModifiedImage(prompt, '正在深化设计细节...'); } });
+        closeCustomModalBtn.addEventListener('click', () => customDetailModal.classList.add('hidden'));
+        submitCustomDetailBtn.addEventListener('click', () => { if (customDetailInput.value.trim()) { customDetailModal.classList.add('hidden'); generateModifiedImage(customDetailInput.value.trim(), '正在深化设计细节...'); customDetailInput.value = ''; } else { showErrorMessage("请输入修改指令。"); } });
+        showModifyModelInputBtn.addEventListener('click', () => { modifyModelInputArea.classList.toggle('hidden'); });
+        submitModelModificationBtn.addEventListener('click', () => { if (modifyModelPrompt.value.trim()) { generateModifiedImage(modifyModelPrompt.value.trim()); } });
+        i2iModelUploadInput.addEventListener('change', (e) => handleI2IFileUpload(e.target.files[0], 'model', i2iModelPreview, i2iModelPreviewContainer, e.target));
+        i2iGarmentUploadInput.addEventListener('change', (e) => handleI2IFileUpload(e.target.files[0], 'garment', i2iGarmentPreview, i2iGarmentPreviewContainer, e.target));
+        tryOnBtn.addEventListener('click', () => tryOnPromptModal.classList.remove('hidden'));
+        closeTryOnPromptModalBtn.addEventListener('click', () => tryOnPromptModal.classList.add('hidden'));
+        submitTryOnPromptBtn.addEventListener('click', () => { tryOnPromptModal.classList.add('hidden'); performTryOn(tryOnPromptInput.value.trim()); });
+        modifyTryOnBtn.addEventListener('click', () => modifyTryOnModal.classList.remove('hidden'));
+        closeModifyTryOnModalBtn.addEventListener('click', () => modifyTryOnModal.classList.add('hidden'));
+        submitModifyTryOnBtn.addEventListener('click', performModification);
+        generateCopyBtn.addEventListener('click', () => generateCopyModal.classList.remove('hidden'));
+        closeGenerateCopyModalBtn.addEventListener('click', () => generateCopyModal.classList.add('hidden'));
+        submitGenerateCopyBtn.addEventListener('click', performGenerateCopy);
+        copyGeneratedTextBtn.addEventListener('click', () => { navigator.clipboard.writeText(generatedCopyText.textContent).then(() => { const originalText = copyGeneratedTextBtn.textContent; copyGeneratedTextBtn.textContent = '已复制!'; setTimeout(() => { copyGeneratedTextBtn.textContent = originalText; }, 2000); }); });
+        copyStoryBtn.addEventListener('click', () => { navigator.clipboard.writeText(storyText.textContent).then(() => { const originalText = copyStoryBtn.textContent; copyStoryBtn.textContent = '已复制!'; setTimeout(() => { copyStoryBtn.textContent = originalText; }, 2000); }); });
+        goToI2IButton.addEventListener('click', () => { mainPage.classList.add('hidden'); i2iPage.classList.remove('hidden'); });
+        goToMainButton.addEventListener('click', () => { i2iPage.classList.add('hidden'); mainPage.classList.remove('hidden'); });
+        refineBtn.addEventListener('click', () => { vocabModal.classList.remove('hidden'); });
+        closeModalBtn.addEventListener('click', () => { vocabModal.classList.add('hidden'); });
+        window.addEventListener('click', function(event) { if (event.target === vocabModal) vocabModal.classList.add('hidden'); if (event.target !== generateModelBtn && !generateModelBtn.contains(event.target)) modelOptions.classList.add('hidden'); });
+        notebookToggle.addEventListener('click', () => notebookPanel.classList.toggle('hidden'));
+        notebookCopyBtn.addEventListener('click', () => { navigator.clipboard.writeText(notebookTextarea.value).then(() => { const originalText = notebookCopyBtn.textContent; notebookCopyBtn.textContent = '已复制!'; setTimeout(() => { notebookCopyBtn.textContent = originalText; }, 2000); }); });
+        notebookClearBtn.addEventListener('click', () => { notebookTextarea.value = ''; localStorage.setItem('fashionNotebookContent', ''); });
+        let saveTimeout;
+        notebookTextarea.addEventListener('input', () => { clearTimeout(saveTimeout); saveTimeout = setTimeout(() => { localStorage.setItem('fashionNotebookContent', notebookTextarea.value); notebookStatus.classList.remove('opacity-0'); setTimeout(() => notebookStatus.classList.add('opacity-0'), 2000); }, 500); });
+        
+        // --- Draggable Notebook Logic ---
+        let isDragging = false;
+        let offsetX, offsetY;
+        notebookHeader.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            offsetX = e.clientX - notebookPanel.offsetLeft;
+            offsetY = e.clientY - notebookPanel.offsetTop;
+            notebookPanel.style.transition = 'none'; // Disable transition during drag
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        function onMouseMove(e) {
+            if (!isDragging) return;
+            const newLeft = e.clientX - offsetX;
+            const newTop = e.clientY - offsetY;
+            notebookPanel.style.left = `${newLeft}px`;
+            notebookPanel.style.top = `${newTop}px`;
+        }
+
+        function onMouseUp() {
+            isDragging = false;
+            notebookPanel.style.transition = ''; // Re-enable transition
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
+
+        encyclopediaToggle.addEventListener('click', () => encyclopediaModal.classList.remove('hidden'));
+        closeEncyclopediaModalBtn.addEventListener('click', () => encyclopediaModal.classList.add('hidden'));
+        encyclopediaSearchBtn.addEventListener('click', handleEncyclopediaSearch);
+        lineartBtn.addEventListener('click', () => { lineartModal.classList.remove('hidden'); });
+        closeLineartModalBtn.addEventListener('click', () => { lineartModal.classList.add('hidden'); });
+        lineartGenerateBtn.addEventListener('click', handleLineartGeneration);
+        lineartCloseCustomModalBtn.addEventListener('click', () => lineartCustomDetailModal.classList.add('hidden'));
+        lineartSubmitCustomDetailBtn.addEventListener('click', () => { const customPrompt = lineartCustomDetailInput.value.trim(); if (customPrompt) { lineartCustomDetailModal.classList.add('hidden'); handleLineartModify(customPrompt); lineartCustomDetailInput.value = ''; } else { showErrorMessage("请输入修改指令。"); } });
+        lineartUploadModifyBtn.addEventListener('click', handleUploadedLineartModify);
+
+        // Auth event listeners
+        sendCodeBtn.addEventListener('click', handleSendCode);
+        loginBtn.addEventListener('click', handleLogin);
+    }
+    
+    // --- NEW: Initial App Logic ---
+    function initializeApp() {
+        setupEventListeners();
+        const token = localStorage.getItem('userToken');
+        if (token) {
+            // Assume token is valid, hide login. 
+            // The fetcher will force re-login if it's invalid.
+            hideLogin();
+        } else {
+            showLogin();
+        }
+    }
+
+    // Start the application
+    initializeApp();
+    </script>
+</body>
+</html>
